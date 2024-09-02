@@ -1,0 +1,85 @@
+FROM ubuntu:latest
+
+# Use a different mirror for faster downloads
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://mirror.math.princeton.edu/pub/ubuntu/|g' /etc/apt/sources.list
+
+# Install necessary packages with retries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-venv \
+    git \
+    openssh-client \
+    sqlite3 \
+    curl \
+    sudo \
+    acl \
+    openssh-server
+
+# Ensure the /run/sshd directory exists and clean up apt cache
+RUN mkdir -p /run/sshd && chmod 0755 /run/sshd
+RUN rm -rf /var/lib/apt/lists/*
+
+# Set up environment variables
+ENV NVM_DIR=/usr/local/nvm
+ENV NODE_VERSION=lts/*
+ENV PATH=$NVM_DIR/versions/node/v$NODE_VERSION/bin:$PATH
+ENV PNPM_HOME=/root/.local/share/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+
+# Install NVM
+RUN mkdir -p $NVM_DIR && \
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | bash
+
+# Install Node.js
+RUN . $NVM_DIR/nvm.sh && \
+    nvm install $NODE_VERSION && \
+    nvm alias default $NODE_VERSION && \
+    nvm use default
+
+# Install pnpm and Next.js
+RUN . $NVM_DIR/nvm.sh && \
+    npm install -g pnpm && \
+    mkdir -p $PNPM_HOME && \
+    pnpm config set global-bin-dir $PNPM_HOME && \
+    pnpm add -g next && \
+    echo "export PATH=$PATH:$PNPM_HOME" >> /root/.bashrc
+
+# Verify installations
+RUN . $NVM_DIR/nvm.sh && \
+    . /root/.bashrc && \
+    node --version && \
+    npm --version && \
+    pnpm --version && \
+    which next && \
+    next --version
+
+# Create and activate virtual environment
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install Python WebSocket library
+RUN pip3 install websockets
+
+# Set up shared folders with write access for all
+RUN mkdir /shared_agents && chmod 777 /shared_agents && \
+    mkdir /shared_user && chmod 777 /shared_user
+
+# Create scripts for managing agents
+COPY docker/create_agent.sh /usr/local/bin/create_agent
+COPY docker/delete_agent.sh /usr/local/bin/delete_agent
+COPY src/irc_websocket_server.py /usr/local/bin/
+COPY docker/start_container.sh /usr/local/bin/
+
+RUN chmod +x /usr/local/bin/create_agent \
+    /usr/local/bin/delete_agent \
+    /usr/local/bin/start_container.sh
+
+# Expose WebSocket port and Next.js default port
+EXPOSE 6667 3000
+
+# Expose the SSH port
+EXPOSE 22
+
+# Use the script as the entrypoint
+ENTRYPOINT ["/usr/local/bin/start_container.sh"]
