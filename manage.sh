@@ -43,14 +43,47 @@ function ensure_container_exists {
 }
 
 function ensure_container_running {
-    ensure_container_exists
     if ! docker ps -q -f name=$CONTAINER_NAME | grep -q .; then
-        echo "Container is not running. Starting it now..."
-        docker start $CONTAINER_NAME
+        echo "Container is not running. Attempting to start it..."
+        docker start $CONTAINER_NAME || {
+            echo "Failed to start existing container. Attempting to recreate..."
+            docker rm -f $CONTAINER_NAME 2>/dev/null || true
+            docker run -d \
+                -p 6668:6668 \
+                -p 3010:3000 \
+                -p 2222:22 \
+                -v $(pwd)/ssh_key:/root/.ssh \
+                -v $(pwd)/shared_user:/shared_user \
+                --name $CONTAINER_NAME \
+                $IMAGE_NAME
+        }
+        
         # Wait for the container to be fully up
-        sleep 10
-        # Start the WebSocket server
+        echo "Waiting for container to fully start..."
+        for i in {1..30}; do
+            if docker exec $CONTAINER_NAME echo "Container is responsive" &> /dev/null; then
+                echo "Container is now running and responsive."
+                break
+            fi
+            if [ $i -eq 30 ]; then
+                echo "Container failed to become responsive after 30 seconds."
+                docker logs $CONTAINER_NAME
+                exit 1
+            fi
+            sleep 1
+        done
+
+        echo "Starting WebSocket server..."
         docker exec $CONTAINER_NAME python3 /usr/local/bin/irc_websocket_server.py &
+    else
+        echo "Container is already running."
+    fi
+
+    # Verify the container is actually running
+    if ! docker ps -q -f name=$CONTAINER_NAME | grep -q .; then
+        echo "Container failed to start or stay running. Here are the logs:"
+        docker logs $CONTAINER_NAME
+        exit 1
     fi
 }
 
@@ -165,7 +198,10 @@ case "$1" in
         python setup_and_run_e2e_tests.py
         ;;
     test)
+        echo "Ensuring container is running..."
         ensure_container_running
+        echo "Container status:"
+        docker ps -a | grep $CONTAINER_NAME
         echo "Running E2E tests..."
         cd tests && npm run test:ci
         ;;
