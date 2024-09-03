@@ -23,10 +23,28 @@ jobs:
         docker --version
         docker info
 
-    - name: Build and start Docker container
+    - name: Check for Docker-related changes
+      id: docker-changes
+      run: |
+        git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q 'docker/' && echo "::set-output name=changed::true" || echo "::set-output name=changed::false"
+
+    - name: Build Docker image if changed
+      if: steps.docker-changes.outputs.changed == 'true'
       run: |
         chmod +x ./manage.sh
         ./manage.sh rebuild
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Pull pre-built Docker image if no changes
+      if: steps.docker-changes.outputs.changed != 'true'
+      run: |
+        docker pull softfl0w/llm-agent-env:latest
+        docker run -d --name llm-agent-container -p 6668:6668 -p 3010:3000 -p 2222:22 softfl0w/llm-agent-env:latest
 
     - name: Install dependencies
       run: |
@@ -39,5 +57,10 @@ jobs:
     - name: Debug Docker container
       if: failure()
       run: |
-        ./manage.sh status
-        ./manage.sh logs
+        docker logs llm-agent-container
+
+    - name: Push new Docker image if built
+      if: steps.docker-changes.outputs.changed == 'true' && success()
+      run: |
+        docker tag llm-agent-env:latest softfl0w/llm-agent-env:latest
+        docker push softfl0w/llm-agent-env:latest
