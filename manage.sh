@@ -47,6 +47,10 @@ function ensure_container_running {
     if ! docker ps -q -f name=$CONTAINER_NAME | grep -q .; then
         echo "Container is not running. Starting it now..."
         docker start $CONTAINER_NAME
+        # Wait for the container to be fully up
+        sleep 10
+        # Start the WebSocket server
+        docker exec $CONTAINER_NAME python3 /usr/local/bin/irc_websocket_server.py &
     fi
 }
 
@@ -107,33 +111,54 @@ function rebuild_and_run {
     docker rm -f $CONTAINER_NAME 2>/dev/null || true
 
     echo "Running new container..."
-    if [ -t 0 ]; then
-        # Interactive mode (TTY available)
-        docker run -it -d \
-            -p 6668:6668 \
-            -p 3010:3000 \
-            -p 2222:22 \
-            -v $(pwd)/ssh_key:/root/.ssh \
-            -v $(pwd)/shared_user:/shared_user \
-            --name $CONTAINER_NAME \
-            $IMAGE_NAME
-    else
-        # Non-interactive mode (no TTY)
-        docker run -d \
-            -p 6668:6668 \
-            -p 3010:3000 \
-            -p 2222:22 \
-            -v $(pwd)/ssh_key:/root/.ssh \
-            -v $(pwd)/shared_user:/shared_user \
-            --name $CONTAINER_NAME \
-            $IMAGE_NAME
-    fi
+    docker run -d \
+        -p 6668:6668 \
+        -p 3010:3000 \
+        -p 2222:22 \
+        -v $(pwd)/ssh_key:/root/.ssh \
+        -v $(pwd)/shared_user:/shared_user \
+        --name $CONTAINER_NAME \
+        $IMAGE_NAME
+    
+    echo "Waiting for container to fully start..."
+    sleep 10
+    
+    echo "Starting WebSocket server..."
+    docker exec $CONTAINER_NAME python3 /usr/local/bin/irc_websocket_server.py &
+}
+
+function pull_image {
+    echo "Pulling pre-built Docker image..."
+    docker pull softfl0w/llm-agent-env:latest
+    
+    echo "Removing existing container if it exists..."
+    docker rm -f $CONTAINER_NAME 2>/dev/null || true
+    
+    echo "Running new container..."
+    docker run -d \
+        -p 6668:6668 \
+        -p 3010:3000 \
+        -p 2222:22 \
+        -v $(pwd)/ssh_key:/root/.ssh \
+        -v $(pwd)/shared_user:/shared_user \
+        --name $CONTAINER_NAME \
+        softfl0w/llm-agent-env:latest
+    
+    echo "Waiting for container to fully start..."
+    sleep 10
+    
+    echo "Starting WebSocket server..."
+    docker exec $CONTAINER_NAME python3 /usr/local/bin/irc_websocket_server.py &
 }
 
 case "$1" in
     rebuild)
         echo "Rebuilding and running Docker container..."
         rebuild_and_run
+        ;;
+    pull)
+        echo "Pulling and running pre-built Docker image..."
+        pull_image
         ;;
     setup-and-test)
         echo "Running setup and E2E tests..."
