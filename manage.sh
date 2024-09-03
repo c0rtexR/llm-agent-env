@@ -95,10 +95,41 @@ function push_to_registry {
     docker push $DOCKER_USERNAME/$IMAGE_NAME:latest
 }
 
+function rebuild_and_run {
+    echo "Building Docker image..."
+    docker build -t $IMAGE_NAME .
+
+    echo "Removing existing container if it exists..."
+    docker rm -f $CONTAINER_NAME 2>/dev/null || true
+
+    echo "Running new container..."
+    if [ -t 0 ]; then
+        # Interactive mode (TTY available)
+        docker run -it -d \
+            -p 6668:6668 \
+            -p 3010:3000 \
+            -p 2222:22 \
+            -v $(pwd)/ssh_key:/root/.ssh \
+            -v $(pwd)/shared_user:/shared_user \
+            --name $CONTAINER_NAME \
+            $IMAGE_NAME
+    else
+        # Non-interactive mode (no TTY)
+        docker run -d \
+            -p 6668:6668 \
+            -p 3010:3000 \
+            -p 2222:22 \
+            -v $(pwd)/ssh_key:/root/.ssh \
+            -v $(pwd)/shared_user:/shared_user \
+            --name $CONTAINER_NAME \
+            $IMAGE_NAME
+    fi
+}
+
 case "$1" in
     rebuild)
         echo "Rebuilding and running Docker container..."
-        bash scripts/rebuild_and_run.sh
+        rebuild_and_run
         ;;
     setup-and-test)
         echo "Running setup and E2E tests..."
