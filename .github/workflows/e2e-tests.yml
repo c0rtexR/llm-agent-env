@@ -7,17 +7,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+
     - name: Set up Node.js
       uses: actions/setup-node@v3
       with:
         node-version: '20'
+
     - name: Debug npm and node versions
       run: |
         npm --version
         node --version
+
+    - name: Verify Docker installation
+      run: |
+        docker --version
+        docker info
+
+    - name: Build and start Docker container
+      run: |
+        chmod +x ./manage.sh
+        ./manage.sh rebuild
+
     - name: Install dependencies
       run: |
         cd tests
         npm --verbose ci
+
     - name: Run E2E tests headlessly
-      run: cd tests && npm run test:ci
+      run: ./manage.sh test
+
+    - name: Debug Docker container
+      if: failure()
+      run: |
+        ./manage.sh status
+        ./manage.sh logs
