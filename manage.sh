@@ -97,6 +97,10 @@ function push_to_registry {
 
 function rebuild_and_run {
     echo "Building Docker image..."
+    if [ ! -f Dockerfile ]; then
+        echo "Dockerfile not found. Please create a Dockerfile in the project root."
+        exit 1
+    fi
     docker build -t $IMAGE_NAME .
 
     echo "Removing existing container if it exists..."
