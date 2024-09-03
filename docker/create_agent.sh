@@ -7,8 +7,12 @@ if [ -z "$AGENT_NAME" ]; then
     exit 1
 fi
 
-# Create user and add to sudo group
-adduser --disabled-password --gecos "" $AGENT_NAME
+# Generate a random password
+AGENT_PASSWORD=$(openssl rand -base64 12)
+
+# Create user and set password
+adduser --gecos "" $AGENT_NAME
+echo "$AGENT_NAME:$AGENT_PASSWORD" | chpasswd
 usermod -aG sudo $AGENT_NAME
 
 # Set up passwordless sudo for this agent
@@ -57,4 +61,12 @@ EOF
 setfacl -m u:$AGENT_NAME:rwx /shared_agents
 setfacl -m u:$AGENT_NAME:rwx /shared_user  # Changed from rx to rwx
 
+# Ensure the directory exists
+mkdir -p /root/.agent_passwords
+
+# Store the password securely (you might want to encrypt this)
+echo "$AGENT_PASSWORD" > /root/.agent_passwords/$AGENT_NAME
+chmod 600 /root/.agent_passwords/$AGENT_NAME
+
 echo "Agent $AGENT_NAME created successfully with full sudo access and Next.js setup"
+echo "Password stored in /root/.agent_passwords/$AGENT_NAME"

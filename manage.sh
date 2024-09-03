@@ -111,11 +111,16 @@ function add_agent {
         exit 1
     fi
     echo "Creating new agent: $1"
-    exec_in_container /bin/bash -c "/usr/local/bin/create_agent $1" || {
-        echo "Failed to create agent. The create_agent script might be missing."
-        echo "Checking for the script location..."
-        exec_in_container /bin/bash -c "find / -name create_agent 2>/dev/null"
-    }
+    exec_in_container /bin/bash -c "/usr/local/bin/create_agent $1"
+    
+    # Retrieve and display the password
+    PASSWORD=$(exec_in_container cat /root/.agent_passwords/$1)
+    if [ -z "$PASSWORD" ]; then
+        echo "Failed to retrieve password. Please check if it was created properly."
+    else
+        echo "Agent created. Password: $PASSWORD"
+        echo "Please store this password securely and delete it from the container."
+    fi
 }
 
 function push_to_registry {
@@ -151,13 +156,21 @@ function rebuild_and_run {
         -v $(pwd)/ssh_key:/root/.ssh \
         -v $(pwd)/shared_user:/shared_user \
         --name $CONTAINER_NAME \
-        $IMAGE_NAME
+        $IMAGE_NAME keep-alive
     
     echo "Waiting for container to fully start..."
-    sleep 10
-    
-    echo "Starting WebSocket server..."
-    docker exec $CONTAINER_NAME python3 /usr/local/bin/irc_websocket_server.py &
+    for i in {1..30}; do
+        if docker exec $CONTAINER_NAME echo "Container is responsive" &> /dev/null; then
+            echo "Container is now running and responsive."
+            break
+        fi
+        if [ $i -eq 30 ]; then
+            echo "Container failed to become responsive after 30 seconds."
+            docker logs $CONTAINER_NAME
+            exit 1
+        fi
+        sleep 1
+    done
 }
 
 function pull_image {
@@ -175,13 +188,21 @@ function pull_image {
         -v $(pwd)/ssh_key:/root/.ssh \
         -v $(pwd)/shared_user:/shared_user \
         --name $CONTAINER_NAME \
-        softfl0w/llm-agent-env:latest
+        softfl0w/llm-agent-env:latest keep-alive
     
     echo "Waiting for container to fully start..."
-    sleep 10
-    
-    echo "Starting WebSocket server..."
-    docker exec $CONTAINER_NAME python3 /usr/local/bin/irc_websocket_server.py &
+    for i in {1..30}; do
+        if docker exec $CONTAINER_NAME echo "Container is responsive" &> /dev/null; then
+            echo "Container is now running and responsive."
+            break
+        fi
+        if [ $i -eq 30 ]; then
+            echo "Container failed to become responsive after 30 seconds."
+            docker logs $CONTAINER_NAME
+            exit 1
+        fi
+        sleep 1
+    done
 }
 
 case "$1" in
