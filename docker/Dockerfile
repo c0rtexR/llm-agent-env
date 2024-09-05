@@ -65,15 +65,19 @@ RUN pip3 install websockets
 RUN mkdir /shared_agents && chmod 777 /shared_agents && \
     mkdir /shared_user && chmod 777 /shared_user
 
-# Create scripts for managing agents
-COPY docker/create_agent.sh /usr/local/bin/create_agent
-COPY docker/delete_agent.sh /usr/local/bin/delete_agent
-COPY src/irc_websocket_server.py /usr/local/bin/
-COPY docker/start_container.sh /usr/local/bin/
+# Create scripts folder and copy scripts
+RUN mkdir -p /usr/local/bin/scripts
+COPY docker/create_agent.sh /usr/local/bin/scripts/
+COPY docker/delete_agent.sh /usr/local/bin/scripts/
+COPY src/irc_websocket_server.py /usr/local/bin/scripts/
+COPY docker/start_container.sh /usr/local/bin/scripts/
 
-RUN chmod +x /usr/local/bin/create_agent \
-    /usr/local/bin/delete_agent \
-    /usr/local/bin/start_container.sh
+RUN chmod +x /usr/local/bin/scripts/create_agent.sh \
+    /usr/local/bin/scripts/delete_agent.sh \
+    /usr/local/bin/scripts/start_container.sh
+
+# Add scripts folder to PATH
+ENV PATH="/usr/local/bin/scripts:${PATH}"
 
 # Expose WebSocket port and Next.js default port
 EXPOSE 6667 3000
@@ -82,4 +86,4 @@ EXPOSE 6667 3000
 EXPOSE 22
 
 # Use the script as the entrypoint
-ENTRYPOINT ["/usr/local/bin/start_container.sh"]
+ENTRYPOINT ["/usr/local/bin/scripts/start_container.sh"]

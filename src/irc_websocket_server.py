@@ -1,6 +1,10 @@
 import asyncio
 import websockets
 import json
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 class IRCServer:
     def __init__(self):
@@ -8,8 +12,11 @@ class IRCServer:
         self.channels = {}
 
     async def register(self, websocket, nickname):
+        logger.debug(f"Registering new client with nickname: {nickname}")
         self.clients[websocket] = nickname
         await self.broadcast(f"{nickname} has joined the server")
+        logger.debug(f"Sent welcome message to {nickname}")
+        await websocket.send(json.dumps({"type": "connect", "content": f"Welcome {nickname}!"}))
 
     async def unregister(self, websocket):
         nickname = self.clients.pop(websocket, None)
@@ -59,21 +66,25 @@ class IRCServer:
 
     async def handler(self, websocket, path):
         try:
+            logger.debug("New connection received")
             await websocket.send(json.dumps({"type": "connect", "content": "Please provide a nickname"}))
             message = await websocket.recv()
             data = json.loads(message)
             nickname = data.get("nickname")
+            logger.debug(f"Received nickname: {nickname}")
             
             await self.register(websocket, nickname)
             
             async for message in websocket:
                 await self.handle_message(websocket, message)
+        except Exception as e:
+            logger.error(f"Error in handler: {str(e)}")
         finally:
             await self.unregister(websocket)
 
 irc_server = IRCServer()
 
-start_server = websockets.serve(irc_server.handler, "0.0.0.0", 6667)
+start_server = websockets.serve(irc_server.handler, "0.0.0.0", 6668)
 
 asyncio.get_event_loop().run_until_complete(start_server)
 asyncio.get_event_loop().run_forever()
