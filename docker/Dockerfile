@@ -14,11 +14,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     sudo \
     acl \
-    openssh-server
+    openssh-server \
+    tmux \
+    && rm -rf /var/lib/apt/lists/*
 
 # Ensure the /run/sshd directory exists and clean up apt cache
 RUN mkdir -p /run/sshd && chmod 0755 /run/sshd
-RUN rm -rf /var/lib/apt/lists/*
+
+# Configure SSH
+RUN echo "PubkeyAuthentication yes" >> /etc/ssh/sshd_config && \
+    echo "PasswordAuthentication no" >> /etc/ssh/sshd_config
 
 # Set up environment variables
 ENV NVM_DIR=/usr/local/nvm

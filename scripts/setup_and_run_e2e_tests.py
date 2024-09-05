@@ -39,7 +39,7 @@ def build_docker_image():
 
 def start_docker_container():
     print("Starting Docker container in detached mode...")
-    output, error, return_code = run_command("docker run -d -p 6668:6668 -p 3010:3000 -p 2222:22 --name llm-agent-container llm-agent-env keep-alive")
+    output, error, return_code = run_command("docker run -d -p 6668:6668 -p 3010:3000 -p 2222:22 --name llm-agent-container llm-agent-env")
     if return_code != 0:
         print(f"Error starting Docker container: {error}")
         return False
